@@ -9,14 +9,16 @@
 
 PG_MODULE_MAGIC;
 
-static HTAB     *labelsHash = NULL;
-static char     **labels = NULL;
+static HTAB         *labelsHash = NULL;
+static char         **labels = NULL;
+static MemoryContext pgByteCtx;
 
-static void allocate_labels_cache();
-static void destroy_labels_cache();
-static void populate_labels_cache();
+static void allocate_and_populate_caches();
+static void destroy_caches();
+static void _populate_labels_cache_and_labels();
 static char * pg_byte_id_to_label_internal(int16 id);
 void show_labels_cache(void);
+void _PG_init(void);
 
 
 typedef struct pgbyte_hashentry {
@@ -25,14 +27,25 @@ typedef struct pgbyte_hashentry {
 } pgbyte_hashentry;
 
 
+void _PG_init(void)
+{
+    /* Figure out the proper values here */
+    pgByteCtx = AllocSetContextCreateExtended(CacheMemoryContext,
+                                              "PG Byte Context",
+                                              16384,
+                                              16384,
+                                              32768);
+    allocate_and_populate_caches();
+}
+
 /* pg_byte_in
  *
  *  input function for pg_byte type
  *
- * Since labels are not hardcoded, but defined in the database, this function
- * is a bit more involved than just parsing strings. Namely, it looks up the
- * input value in the hash of the label to ids in the CachedMemoryContext.
- * Upon finding no such hash it is built by this function
+ *  Since labels are not hardcoded, but defined in the database, this function
+ *  is a bit more involved than just parsing strings. Namely, it looks up the
+ *  input value in the hash of the label to ids; the cache is stored in our own
+ *  memory context, a child of CacheMemoryContext.
  */
 PG_FUNCTION_INFO_V1(pg_byte_in);
 Datum
@@ -41,11 +54,8 @@ pg_byte_in(PG_FUNCTION_ARGS)
     pgbyte_hashentry *entry;
     char    *name = PG_GETARG_CSTRING(0);
 
-    if (labelsHash == NULL || labels == NULL)
-    {
-        allocate_labels_cache();
-        populate_labels_cache();
-    }
+    Assert(labels != NULL && labelsHash != NULL);
+
     if ((entry = hash_search(labelsHash, name, HASH_FIND, NULL)) == NULL)
         ereport(ERROR, (errmsg("invalid input value for type pg_byte: %s", name)));
 
@@ -58,8 +68,9 @@ Datum
 pg_byte_out(PG_FUNCTION_ARGS)
 {
     char        *label;
-
     pg_byte     id = PG_GETARG_PG_BYTE(0);
+
+    Assert(labels != NULL && labelsHash != NULL);
 
     label = pg_byte_id_to_label_internal(id);
     if (label == NULL)
@@ -122,9 +133,8 @@ pg_byte_populate_values(PG_FUNCTION_ARGS)
     SPI_finish();
 
     /* now repopulate the cache with the new data */
-    destroy_labels_cache();
-    allocate_labels_cache();
-    populate_labels_cache();
+    destroy_caches();
+    allocate_and_populate_caches();
 
     PG_RETURN_VOID();
 }
@@ -148,6 +158,8 @@ pg_byte_id_to_label(PG_FUNCTION_ARGS)
         ereport(ERROR, (errmsg("invalid id %d", id),
                         errhint("id must be in the range from 0 to 255")));
 
+    Assert(labels != NULL && labelsHash != NULL);
+
     label = pg_byte_id_to_label_internal(id);
     if (label == NULL)
         ereport(ERROR, (errmsg("no matching label for an id: %d", id)));
@@ -165,64 +177,51 @@ static char * pg_byte_id_to_label_internal(int16 id)
 {
     char    *label;
 
-    if (labelsHash == NULL || labels == NULL)
-    {
-        allocate_labels_cache();
-        populate_labels_cache();
-    }
-
     label = labels[id];
     return label;
 }
 
-static void allocate_labels_cache()
+static void allocate_and_populate_caches()
 {
-    MemoryContext   oldcxt;
     HASHCTL         ctl;
 
     Assert(labelsHash == NULL && labels == NULL);
 
+    // Create or own memory context, a child of CacheMemoryContext;
+
     ctl.keysize = NAMEDATALEN;
     ctl.entrysize = sizeof(pgbyte_hashentry);
-    ctl.hcxt = CacheMemoryContext;
+    ctl.hcxt = pgByteCtx;
 
     labelsHash = hash_create("pg_byte label ids hash", 256,
                                 &ctl, HASH_ELEM | HASH_CONTEXT);
 
-    oldcxt = MemoryContextSwitchTo(CacheMemoryContext);
-    labels = palloc0(PG_BYTE_MAX_LABELS * sizeof(char *));
-    MemoryContextSwitchTo(oldcxt);
+    labels = MemoryContextAllocZero(pgByteCtx, PG_BYTE_MAX_LABELS * sizeof(char *));
+    _populate_labels_cache_and_labels();
 }
 
-static void destroy_labels_cache()
+static void destroy_caches()
 {
     if (labelsHash == NULL || labels == NULL)
     {
         Assert(labelsHash == NULL && labels == NULL);
         return;
     }
-    /* TODO: better create its own memory context and destroy it afterwards */
-    for (int i = 0; i < PG_BYTE_MAX_LABELS; i++)
-    {
-        if (labels[i] != NULL)
-            pfree(labels[i]);
-    }
+    MemoryContextReset(pgByteCtx);
 
-    pfree(labels);
-    hash_destroy(labelsHash);
     labels = NULL;
     labelsHash = NULL;
 }
 
 /* populate labels to IDs hash by reading pg_byte_labels database table */
-static void populate_labels_cache()
+static void _populate_labels_cache_and_labels()
 {
     int         ret,
                 processed;
 
     const char *sql = "SELECT id, label FROM pg_byte_labels ORDER BY id";
 
-    Assert(labelsHash != NULL);
+    Assert(labelsHash != NULL && labels != NULL);
 
     SPI_connect();
     /*
@@ -264,7 +263,7 @@ static void populate_labels_cache()
             Assert(!found);
             entry->value = id;
             /* add it to the id -> label mapping as well */
-            labels[id] = MemoryContextStrdup(CacheMemoryContext, label);
+            labels[id] = MemoryContextStrdup(pgByteCtx, label);
         }
     }
     SPI_finish();
