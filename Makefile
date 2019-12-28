@@ -5,5 +5,5 @@ PGXS := $(shell $(PG_CONFIG) --pgxs)
 MODULE_big = pg_byte
 # XXX: use Makefile $(foo:*.o=%.c syntax instead)
 OBJS = $(patsubst %.c,%.o,$(wildcard src/*.c))
-REGRESS=basic
+REGRESS=create basic operators btree drop
 include $(PGXS)

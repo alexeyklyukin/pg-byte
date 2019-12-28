@@ -81,7 +81,7 @@ pg_byte_out(PG_FUNCTION_ARGS)
     label = labels[id];
     if (label == NULL)
         ereport(ERROR, (errmsg("invalid output value for type pg_byte: %d", id)));
-    PG_RETURN_CSTRING(label);
+    PG_RETURN_CSTRING(pstrdup(label));
 }
 
 /* type binary send function */

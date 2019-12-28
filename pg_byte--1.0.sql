@@ -36,6 +36,151 @@ CREATE TYPE pg_byte (
     like="char"
 );
 
+CREATE FUNCTION pg_byte_eq(pg_byte, pg_byte)
+    RETURNS bool
+    AS 'chareq'
+    LANGUAGE internal immutable strict;
+
+CREATE FUNCTION pg_byte_ne(pg_byte, pg_byte)
+    RETURNS bool
+    AS 'charne'
+    LANGUAGE internal immutable strict;
+
+CREATE FUNCTION pg_byte_lt(pg_byte, pg_byte)
+    RETURNS bool
+    AS 'charlt'
+    LANGUAGE internal immutable strict;
+
+CREATE FUNCTION pg_byte_le(pg_byte, pg_byte)
+    RETURNS bool
+    AS 'charle'
+    LANGUAGE internal immutable strict;
+
+CREATE FUNCTION pg_byte_gt(pg_byte, pg_byte)
+    RETURNS bool
+    AS 'chargt'
+    LANGUAGE internal immutable strict;
+
+CREATE FUNCTION pg_byte_ge(pg_byte, pg_byte)
+    RETURNS bool
+    AS 'charge'
+    LANGUAGE internal immutable strict;
+
+CREATE FUNCTION pg_byte_cmp(pg_byte, pg_byte)
+    RETURNS integer
+    AS 'btcharcmp'
+    LANGUAGE internal immutable strict;
+
+CREATE FUNCTION hash_pg_byte(pg_byte)
+    RETURNS integer
+    AS 'hashchar'
+    LANGUAGE internal immutable strict;
+
+CREATE OPERATOR = (
+    LEFTARG = pg_byte,
+    RIGHTARG = pg_byte,
+    PROCEDURE = pg_byte_eq,
+    COMMUTATOR = '=',
+    NEGATOR = '<>',
+    RESTRICT = eqsel,
+    JOIN = eqjoinsel
+);
+
+CREATE OPERATOR <> (
+    LEFTARG = pg_byte,
+    RIGHTARG = pg_byte,
+    PROCEDURE = pg_byte_ne,
+    COMMUTATOR = '<>',
+    NEGATOR = '=',
+    RESTRICT = neqsel,
+    JOIN = neqjoinsel
+);
+
+CREATE OPERATOR < (
+    LEFTARG = pg_byte,
+    RIGHTARG = pg_byte,
+    PROCEDURE = pg_byte_lt,
+    COMMUTATOR = '>',
+    NEGATOR = '>=',
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel
+);
+
+CREATE OPERATOR <= (
+    LEFTARG = pg_byte,
+    RIGHTARG = pg_byte,
+    PROCEDURE = pg_byte_le,
+    COMMUTATOR = '>=',
+    NEGATOR = '>',
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel
+);
+
+CREATE OPERATOR > (
+    LEFTARG = pg_byte,
+    RIGHTARG = pg_byte,
+    PROCEDURE = pg_byte_gt,
+    COMMUTATOR = '<',
+    NEGATOR = '<=',
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel
+);
+
+CREATE OPERATOR >= (
+    LEFTARG = pg_byte,
+    RIGHTARG = pg_byte,
+    PROCEDURE = pg_byte_ge,
+    COMMUTATOR = '<=',
+    NEGATOR = '<',
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel
+);
+
+DO $body$
+DECLARE pg_version integer;
+BEGIN
+    SELECT current_setting('server_version_num') INTO STRICT pg_version;
+    IF pg_version > 90600 THEN
+        EXECUTE $$ ALTER FUNCTION pg_byte_in(cstring) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_out(pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_send(pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_recv(internal) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_eq(pg_byte, pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_ne(pg_byte, pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_lt(pg_byte, pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_le(pg_byte, pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_gt(pg_byte, pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_ge(pg_byte, pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION pg_byte_cmp(pg_byte, pg_byte) PARALLEL SAFE $$;
+        EXECUTE $$ ALTER FUNCTION hash_pg_byte(pg_byte) PARALLEL SAFE $$;
+    END IF;
+
+    IF pg_version >= 110000 THEN
+        EXECUTE $$ ALTER OPERATOR <= (pg_byte, pg_byte)
+            SET (RESTRICT = scalarlesel, JOIN = scalarlejoinsel); $$;
+        EXECUTE $$ ALTER OPERATOR >= (pg_byte, pg_byte)
+            SET (RESTRICT = scalargesel, JOIN = scalargejoinsel); $$;
+    END IF;
+END;
+$body$;
+
+
+CREATE OPERATOR CLASS btree_pg_byte_ops
+DEFAULT FOR TYPE pg_byte USING btree
+AS
+    OPERATOR    1   <,
+    OPERATOR    2   <=,
+    OPERATOR    3   =,
+    OPERATOR    4   >=,
+    OPERATOR    5   >,
+    FUNCTION    1   pg_byte_cmp(pg_byte, pg_byte);
+
+CREATE OPERATOR CLASS hash_pg_byte_ops
+DEFAULT FOR TYPE pg_byte USING hash
+AS
+    OPERATOR    1   =,
+    FUNCTION    1   hash_pg_byte(pg_byte);
+
 -- populate initial values into the byte type
 -- each element will be assigned an unsigned int value
 -- from 0 to 255 depending on its position in the array
