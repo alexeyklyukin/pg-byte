@@ -5,13 +5,13 @@
 #include "libpq/pqformat.h"
 #include "utils/memutils.h"
 
-#include "pg_byte.h"
+#include "core.h"
 
 PG_MODULE_MAGIC;
 
 static HTAB         *labelsHash = NULL;
 static char         **labels = NULL;
-static MemoryContext pgByteCtx;
+static MemoryContext pg_byte_ctx;
 
 static void _populate_labels_cache_and_labels();
 static void allocate_and_populate_caches();
@@ -28,17 +28,17 @@ PG_FUNCTION_INFO_V1(pg_byte_recv);
 PG_FUNCTION_INFO_V1(pg_byte_populate_values);
 PG_FUNCTION_INFO_V1(pg_byte_id_to_label);
 
-typedef struct pgbyte_hashentry {
+typedef struct pg_byte_hashentry {
     char key[NAMEDATALEN];
     pg_byte value;
-} pgbyte_hashentry;
+} pg_byte_hashentry;
 
 /* initialization, create memory context and populate caches from DB */
 void _PG_init(void)
 {
     /* Figure out the proper values here */
-    pgByteCtx = AllocSetContextCreateExtended(CacheMemoryContext,
-                                              "PG Byte Context",
+    pg_byte_ctx = AllocSetContextCreateExtended(CacheMemoryContext,
+                                              "PG_BYTE Context",
                                               16384,
                                               16384,
                                               32768);
@@ -58,7 +58,7 @@ void _PG_init(void)
 Datum
 pg_byte_in(PG_FUNCTION_ARGS)
 {
-    pgbyte_hashentry *entry;
+    pg_byte_hashentry *entry;
     char    *name = PG_GETARG_CSTRING(0);
 
     Assert(labels != NULL && labelsHash != NULL);
@@ -170,7 +170,7 @@ pg_byte_id_to_label(PG_FUNCTION_ARGS)
     PG_RETURN_TEXT_P(label_text);
 }
 
-/* allocate memory in the PGByte context and populate caches */
+/* allocate memory in the PG_BYTE context and populate caches */
 static void allocate_and_populate_caches()
 {
     HASHCTL         ctl;
@@ -180,20 +180,20 @@ static void allocate_and_populate_caches()
     // Create or own memory context, a child of CacheMemoryContext;
 
     ctl.keysize = NAMEDATALEN;
-    ctl.entrysize = sizeof(pgbyte_hashentry);
-    ctl.hcxt = pgByteCtx;
+    ctl.entrysize = sizeof(pg_byte_hashentry);
+    ctl.hcxt = pg_byte_ctx;
 
-    labelsHash = hash_create("pg_byte label ids hash", 256,
+    labelsHash = hash_create("PG_BYTE label ids hash", 256,
                                 &ctl, HASH_ELEM | HASH_CONTEXT);
 
-    labels = MemoryContextAllocZero(pgByteCtx, PG_BYTE_MAX_LABELS * sizeof(char *));
+    labels = MemoryContextAllocZero(pg_byte_ctx, PG_BYTE_MAX_LABELS * sizeof(char *));
     _populate_labels_cache_and_labels();
 }
 
 /* reset current caches and repopulate them */
 static void repopulate_caches()
 {
-    MemoryContextReset(pgByteCtx);
+    MemoryContextReset(pg_byte_ctx);
     labels = NULL;
     labelsHash = NULL;
     allocate_and_populate_caches();
@@ -230,7 +230,7 @@ static void _populate_labels_cache_and_labels()
         {
             char                    *label;
             uint8                   id;
-            pgbyte_hashentry       *entry;
+            pg_byte_hashentry       *entry;
             HeapTuple               tuple;
             bool                    isnull,
                                     found;
@@ -241,7 +241,7 @@ static void _populate_labels_cache_and_labels()
             Assert(!isnull);
 
             label = SPI_getvalue(tuple, tupdesc, 2);
-            entry = (pgbyte_hashentry *)hash_search(labelsHash, label, HASH_ENTER, &found);
+            entry = (pg_byte_hashentry *)hash_search(labelsHash, label, HASH_ENTER, &found);
             /*
              * this should be a new entry, since there should be no
              * duplicate lables in the target table.
@@ -249,7 +249,7 @@ static void _populate_labels_cache_and_labels()
             Assert(!found);
             entry->value = id;
             /* add it to the id -> label mapping as well */
-            labels[id] = MemoryContextStrdup(pgByteCtx, label);
+            labels[id] = MemoryContextStrdup(pg_byte_ctx, label);
         }
     }
     SPI_finish();
