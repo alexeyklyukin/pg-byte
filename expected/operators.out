@@ -1,84 +1,57 @@
+\pset format unaligned
 SELECT 'one'::pg_byte ='one'::pg_byte;
- ?column? 
-----------
- t
+?column?
+t
 (1 row)
-
 SELECT 'one'::pg_byte = 'two'::pg_byte;
- ?column? 
-----------
- f
+?column?
+f
 (1 row)
-
 SELECT 'one'::pg_byte <> 'two'::pg_byte;
- ?column? 
-----------
- t
+?column?
+t
 (1 row)
-
 SELECT 'one'::pg_byte <> 'one'::pg_byte;
- ?column? 
-----------
- f
+?column?
+f
 (1 row)
-
 SELECT 'one'::pg_byte < 'two'::pg_byte;
- ?column? 
-----------
- t
+?column?
+t
 (1 row)
-
 SELECT 'two'::pg_byte < 'one'::pg_byte;
- ?column? 
-----------
- f
+?column?
+f
 (1 row)
-
 SELECT 'one'::pg_byte <= 'two'::pg_byte;
- ?column? 
-----------
- t
+?column?
+t
 (1 row)
-
 SELECT 'two'::pg_byte <= 'two'::pg_byte;
- ?column? 
-----------
- t
+?column?
+t
 (1 row)
-
 SELECT 'two'::pg_byte <= 'one'::pg_byte;
- ?column? 
-----------
- f
+?column?
+f
 (1 row)
-
 SELECT 'two'::pg_byte > 'one'::pg_byte;
- ?column? 
-----------
- t
+?column?
+t
 (1 row)
-
 SELECT 'one'::pg_byte > 'two'::pg_byte;
- ?column? 
-----------
- f
+?column?
+f
 (1 row)
-
 SELECT 'two'::pg_byte >= 'one'::pg_byte;
- ?column? 
-----------
- t
+?column?
+t
 (1 row)
-
 SELECT 'two'::pg_byte >= 'two'::pg_byte;
- ?column? 
-----------
- t
+?column?
+t
 (1 row)
-
 SELECT 'one'::pg_byte >= 'two'::pg_byte;
- ?column? 
-----------
- f
+?column?
+f
 (1 row)
-

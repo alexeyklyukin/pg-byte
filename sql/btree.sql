@@ -1,3 +1,4 @@
+\pset format unaligned
 TRUNCATE TABLE test;
 CREATE INDEX ON test(data);
 SET enable_seqscan to 'off';

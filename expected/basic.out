@@ -1,23 +1,20 @@
+\pset format unaligned
 SELECT pg_byte_populate_values(ARRAY['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']::name[]);
- pg_byte_populate_values 
--------------------------
- 
-(1 row)
+pg_byte_populate_values
 
+(1 row)
 CREATE TABLE test(id integer primary key, data pg_byte);
 INSERT INTO test SELECT id, pg_byte_id_to_label(id::smallint)::pg_byte FROM generate_series(1, 10) id;
 SELECT * FROM test;
- id | data  
-----+-------
-  1 | one
-  2 | two
-  3 | three
-  4 | four
-  5 | five
-  6 | six
-  7 | seven
-  8 | eight
-  9 | nine
- 10 | ten
+id|data
+1|one
+2|two
+3|three
+4|four
+5|five
+6|six
+7|seven
+8|eight
+9|nine
+10|ten
 (10 rows)
-
